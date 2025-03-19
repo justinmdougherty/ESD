@@ -1,0 +1,474 @@
+This is the firmware for the ESD MCU subsection of the Lightning BOLT handheld
+BFT with GDB infil.
+
+Project Owner(s): NSWCDD/H12/Pharos
+Author(s): Nick Sunshine, Megan Kozub, Rob Kirby
+Hardware Platform: Lightning BOLT HH production display board and main board
+Debuggers Used: Microchip ICD 3
+Programmers Used: Microchip ICD 3
+MPLAB Version: X IDE v5.15
+C Compiler: XC16
+
+FILES INCLUDED IN THE PROJECT TREE:
+--------------------------------------------------------------------------------
+config_memory.c/h - interface to the memory map of device configurable
+  operational/algorithmic parameters stored in non-volatile memory.
+
+configuration_bits.c - Contains device configuration bit macros.  Refer to
+the comments in configuration_bits.c for instructions on where to get
+information about device configuration bits and their corresponding macros.
+
+coords.c/h - convert from lat/lon to MGRS geographic coordinate systems
+
+crc.c/h - driver functions for PIC24FJ128GA20x CRC peripheral.
+
+esd_ver.h - Defines the string value of the ESD firmware version
+
+fonts.c/h - Define various font widths, heights, and size in bytes; declare the
+  various constant font values to be used with the UC1701X LCD display.
+
+geofence.c/h - check to see if a geo point is within a geozone
+
+i2c2.c/h - driver for the PIC24FJ128GA202's I2C2 module in a polled mode reading
+  and writing individual bytes (i.e. doesn't use data queues)
+
+interrupts.c - This file contains the default ISR for interrupts. The user would
+  put the interrupt vectors for their application in the modules that implement
+  the peripheral that generates the IRQ.
+
+keypad.c/h - driver for hand-held 4-button keypad; periodic input scans and wake
+  hand-held from PWR OFF.
+
+lcd.c/h - interface to write font strings to UC1701X LCD display of hand-held
+
+ltc2943.c/h - interface to LTC2943 columb counter IC and defines used to
+  implement battery gas gauge functionality.
+
+main.c/h - top level (main) attributes and methods required to implement user
+  interface (aka ESD) of NSWCDD's Lightning BOLT hand-held.
+
+mc24aa512.h - driver functions for Microchip EEPROM 24AA512.
+mc24aa512_i2c2.c - driver functions using uC's i2c2 for Microchip EEPROM 24AA512
+
+micro_defs.h - microcontroller pin useage/definitions, plethora of system stuff,
+  how uC peripherals are assigned, etc.
+
+queue.c/h - Generic circular queue.
+
+stdint_extended.h - Defines, typedefs, and unions to extend stdint.h
+
+tmr2.c/h - PIC24 16-bit synchronous TIMER2 driver.
+
+traps.c - Define ISRs for traps and _DefaultInterrupt.  Code for traps results
+  a software reset of the microcontroller.  If the code in this file
+  is entered, that means there is a critical hardware problem or software bug.
+  The trap will need evaluated by the user to determine the source
+  of the problem.  www.microchip.com/codeexamples contains trap example code
+  which can be used as a reference to help debug traps.
+
+uart.h - Declare few things common to my queue based PIC UART drivers
+
+uart1_queued.c/h - interface to IRQ driven 19200/8/N/1 implementation of UART1
+  for reading data into a queue (can trigger a flag when a #defined value rcvd)
+  and writing data from a queue (automatically stopping when queue emptied).
+
+uc1701x.c/h - driver for the EA DOGS102W-6 UC1701 LCD display using the SPI1
+  module on the PIC24FJ128GA202.
+
+../Lightning/bt_waveform_traits.h
+../Lightning/ltng_cmpnt.h
+
+
+ESD REVISION HISTORY (reverse chronological order):
+--------------------------------------------------------------------------------
+M.m.f.t (2022/mm/dd) Rob Kirby                    XC16 v1.24
+  Code Size - Prgm:  (%) bytes  Data:  (%)
+  Files Altered
+
+TODO -
+  * Change Admin Infil Choices screen to not move to unloaded key options
+  * Streamline sharing of bt_waveform_traits.h between LTNG and ESD, e.g.
+    remove BUILDING_ESD from ESD main.h (and bunch more changes in LTNG)
+
+1.6.0.D (2021/10/25) Rob Kirby                    XC16 v1.24
+  Code Size - Prgm: 26,721 (61%) bytes  Data: 5,616 (69%)
+  1 move define of COORD_LEN from main.c to coords.h
+  2 Handle D.GLL providing lat/lon as +DDD.ddddd rather than hDDD.MM.SS
+  3 Related to 2: typedef coords_t, add several Lat/Lon converters; delete now
+    obsolete ValidateDMS() but add DblLatLonToDMS(); rework LatLonToMGRS() to
+    DblLatLonToMGRS() and LatLonToGeopt16() to CoordsToGeopt16()
+  4 Add handling infil message 0C for display on new Range & Bearing screen and
+    create 10-deep FIFO of 0C message data (separate from 50-deep C2 data FIFO)
+  5 Related to 4, add CalcRngBrg() and HexDegToDblDeg()
+  6 Add new attribute for index of newest message unread wrt general C2 infil
+  7 Remove some stubbed out vestigial code; replace various coordinates buffers
+    with single coords_t myLoc (which also holds floating point coords);
+    Routine the code for Start Lbhh Zeroize since in more than one place;
+    Routine the code to FIFO general purpose GDB C2 infil for readability;
+    Refactor dsplfld_t .brev to .actvBrev for clarity;
+  8 Move txdtycy_t to bt_waveform_traits.h (from ESD main.h and LTNG bt_intfc.h)
+  9 Add option to display GPS fix coordinates as decimal degrees (+DDD.ddddd)
+    i.e. now have DMS, _DEC_, and MGRS options
+ 10 More pre-defined waveforms, specifically for 2021/09/28 waveform discussion,
+    plus anticipating future growth. Now (AME6|AME8|UWRL|SHLN * Band_1|2|3 * G)
+ 11 Add "Replace Batteries" notice to P-BIT's UpdateSysCheckDisplay()
+ 12 Automate "wait after waveform selection" and cycling Ltng power
+ 13 Change CH/UWRL duty cycle displayed options to 1/1, 1/2, 1/10
+ 14 Add screen to delete all infil data w/o having to remove all power sources
+ 15 Fix Geo-Mute admin screen selection not getting saved to nvmem until
+    something else changed (e.g. backlight); dont ENT|RT key in BREV|DTYCY scrns
+ 16 Do not Invoke911() when geo-muted (i.e. WGM_ACTVD == selWfTrait.wgmOpt)
+ 17 Fix not displaying 1st rcvd GDB if in GDB screen when 1st msg arrived
+ 18 Update to same stdint_extended.h as used by Lightning for R&B support
+ 19 Remove various vestigial includes
+ 20 Replace wtp_t WTP_NM with WTP_A for accepting All BT transmit power options
+    not just Normal and Max (now '0':Min, '1':Low, '2':Norm, '3':Max)
+ 21 Add support for Low Power Mode to disable INFIL, mute TX, and minimize GPS
+  Files Altered
+    ../Lightning/bt_waveform_traits.h   (8,10,20)
+    config_memory.c                     (19)
+    coords.c/h                          (1,3,5)
+    keypad.c                            (comment only)
+    main.c/h                            (1,2,4,6-17,20,21)
+    stdint_extended.h                   (18)
+    esd_ver.h
+
+1.5.0.2 (2021/06/03) Rob Kirby                    XC16 v1.24
+  Code Size - Prgm: 21,833 (50%) bytes  Data: 4,816 (59%)
+  1 Add support for geo-muted waveforms
+  2 Related to 1, use VERDANA_34X56_SPACE clear 7 out of LCD's 8 character rows
+  3 Related to 1, add ability to check D.GLL data against geozone
+  4 Define selWfTrait to replace wfTrait[devCfg.selWfIdx] for code readability
+  5 Move TEMP_SCHED_CTDN to bt_waveform_traits.h because shared w/Ltng
+  Files Added:
+    geofence.c/h                        (3)
+  Files Altered
+    config_memory.c                     (1)
+    coords.c/h                          (3)
+    fonts.c/h                           (2)
+    lcd.c                               (2)
+    main.c/h                            (1,2,3,4,5)
+    ../Lightning/bt_waveform_traits.h   (1,5)
+    esd_ver.h
+
+1.3.2.1 (2020/12/08) Rob Kirby                    XC16 v1.24
+  Mod 1.3.2.0(H) to support SDV-2 tests which need PINE
+  Code Size - Prgm: 20,780 (47%) bytes  Data: 4,534 (55%)
+  1 Support of BOLT waveform load order known a priori.
+    Supports WFs: (1)Lynx-8; (2)PINE; (3)unused; (4)unused
+  Files Altered
+    ../Lightning/bt_waveform_load.h     (1)
+    esd_ver.h
+
+1.4.0.4(HC) (2020/08/20) Rob Kirby                    XC16 v1.24
+  To facilitate recovery after wf loading/testing by NIWC & CTC (or other C.ECP)
+  Code Size - Prgm: 21,043 (48%) bytes  Data: 4,732 (58%)
+  C Define hidden-key KEYPAD_SCANCODE_HDN unconditionally,no conditional compile
+    Have KEYPAD_SCANCODE_HDN in INFIL KEY NAMES screen send C.ECP 1 and set
+    focus to HOME (way to de-expose BOLT Debug port when units returned from
+    CTC or NIWC and expose Lightning to COMx as is typical).  This is in prep
+    for CATAMOUNT waveform which NIWC will need to squirt into BOLTs.
+  * Do not change version because of CH cert when this had nothing to do w/WFs
+  Files Altered
+    keypad.c/h                          (C)
+    main.c                              (C)
+
+1.4.0.4(H) (2020/08/06) Rob Kirby                    XC16 v1.24
+  Code Size - Prgm: 21,010 (48%) bytes  Data: 4,732 (58%)
+  H Mod CFGPGM back-light default BS_HIGH to see back light upon uC flash
+  * Do not change version because of CH cert when this had nothing to do w/WFs
+  Files Altered
+    config_memory.c                     (H)
+
+1.3.2.0(H) (2020/08/06) Rob Kirby                    XC16 v1.24
+  Code Size - Prgm: 20,768 (47%) bytes  Data: 4,534 (55%)
+  H Mod CFGPGM back-light default BS_HIGH to see back light upon uC flash
+  Files Altered
+    config_memory.c                     (H)
+
+1.3.2.0 (2020/07/09) Rob Kirby                    XC16 v1.24
+  Code Size - Prgm: 20,768 (47%) bytes  Data: 4,534 (55%)
+  Branch from 1.3.1.C to refurb 1.3.1.4 units which have older BOLTs that do not
+  support all improvements in user port interface made since early rev 4 BOLTs.
+  Code Size - Prgm: 20,768 (47%) bytes  Data: 4,534 (55%)
+  1 Support of BOLT waveform load order known a priori.
+    Supports WFs: (1)Lynx-8; (2)unused; (3)unused; (4)unused
+  Files Altered
+    ../Lightning/bt_waveform_load.h     (1)
+    esd_ver.h
+
+1.4.0.4 (2020/04/06) Rob Kirby                    XC16 v1.24
+  Code Size - Prgm: 21,010 (48%) bytes  Data: 4,732 (58%)
+  Code baseline for CH certification with BOLT rev 4.1, NSWCPC antenna, 5mm
+  board stack, and grey u.fl (should carry-over BOLT 4.0 and Ball antenna)
+  1 Changes to implement and make use of new "waveform information" interface
+    messages. This effort is to get away from wf load-out specific fw versions
+    that depend on changing bt_waveform_load.h.
+    Know that the LBHH will be of little use prior to receiving the suite of
+    C.WFI messages via COMx to inform it of the waveforms in all slots.
+  2 Delete bt_waveform_load.h, moving some things, e.g. BOOT_MUTE, to
+    bt_waveform_traits.h for use in both ESD and Lightning.
+  3 Add conditional compilation on ALLOW_HDN_INPUT ?defined? in keypad.h as part
+    of removing hidden ADMIN menus since users have had time to learn unhidden
+    admin menus.  Related - refactor KEYPAD_SCANCODE_ADM to KEYPAD_SCANCODE_HDN
+  4 Get updated crc.c/h code from Lightning, which protects against bad address,
+    typdefs crc_t and defines CRC_SIZE.  Make use of those.
+  5 Modify bt_waveform_load.h and main.h to use define BUILDING_ESD
+  6 Delete files from folder that in 1.3.1.9 were removed from project
+  7 Modify EXFIL WAVEFORM screen to also display TX ID
+  8 When invalid waveform selected modify screen flow & do not allow 911
+    but do allow ZEROIZE
+  Files Deleted:
+    ../Lightning/bt_waveform_load.h     (1,2)
+    si7021.c/h                          (6)
+  Files Altered
+    ../Lightning/bt_waveform_traits.h   (1,2,5)
+    config_memory.c/h                   (4)
+    crc.c/h                             (4)
+    keypad.c/h                          (3)
+    main.c/h                            (1,2,3,4,5,7,8)
+    esd_ver.h
+
+1.3.2.1 (2020/12/08)  See entry made in chronological order (above 1.4.0.4(HC))
+
+1.3.2.0 (2020/07/07)  See entry made in chronological order (above 1.4.0.4)
+
+1.3.1.C (2019/12/09) Rob Kirby                    XC16 v1.24
+  Code Size - Prgm: 20,768 (47%) bytes  Data: 4,534 (55%)
+  1 Build for SOCOM/SOCEUR delivery awaiting CH cert (load order known a priori)
+    Supports WFs: (1)Lynx-6; (2)Lynx-8
+  2 From FP_XP_N/M go up to FP_ADM_N - i.e. unhide admin capabilities but don't
+    remove the hidden path just yet (so two ways to access admin functions)
+  Files Altered:
+    ../Lightning/bt_waveform_load.h     (1)
+    main.c                              (2)
+    esd_ver.h
+
+1.3.1.B (2019/11/22) Rob Kirby                    XC16 v1.24
+  Code Size - Prgm: ~20,795 (47%) bytes  Data: 4,534 (55%)
+  Code baseline for CH certification with BOLT rev 4.0 and Ball antenna
+  1 Build to deliver using CH waveform (load order known a priori)
+    Supports WFs: (1)Lynx-6; (2)Lynx-8; (3)CH
+  Files Altered:
+    ../Lightning/bt_waveform_load.h     (1)
+    esd_ver.h
+
+1.3.1.9 (2019/09/06) Rob Kirby                    XC16 v1.24
+  Code Size - Prgm: ~20,795 (47%) bytes  Data: 4,534 (55%)
+  1 Fix comments
+  2 More changes in shared Lightning files, primarily for CH, with some re-org
+  3 Obsolete SI7021 Temperature & Humidity sensor IC code stubbed out / removed
+    from project (may at some point redesign with [same family] replacement)
+  4 Mod CFGPGM back to default waveform 1 since not all BOLTs are multi-wf
+  5 Allow brevity code 000 for UNDERWORLD waveforms, e.g. CH, as values limited
+  Files Altered
+    ../Lightning/bt_waveform_load.h     (2)
+    ../Lightning/bt_waveform_traits.h   (2)
+    config_memory.c     (4)
+    main.c              (1,3,5)
+    micro_defs.h        (3)
+    si7021.c/h          (3) simply removed from project, left in folder
+    esd_ver.h
+
+1.3.1.8 (2019/07/22) Rob Kirby                    XC16 v1.24
+  1 Build to test using CH waveform (load order known a priori)
+    Supports WFs: (1)Lynx-8; (2)AdvLynx-8; (3)CH
+  2 Move BOOT_MUTE to bt_waveform_load.h for use in both ESD and Lightning
+  3 Allow four CH duty cycles (Mute, 4/40, 4/8, 4/4) now wf responses verified
+  4 Modify UpdateDisplayedOpStatus() to not countdown more than 30 sec
+  5 Change NVG back light from 0.02% to 0.12% to make it readable w/o NVGs since
+    focal length of NVGs is such that cannot read small font with them anyway
+  Files Altered:
+    ../Lightning/bt_waveform_load.h     (1,2)
+    ../Lightning/bt_waveform_traits.h   (3)
+    main.c              (2,3,4)
+    uc1701x.h           (5)
+    esd_ver.h
+
+1.3.1.5 (2019/01/28) Rob Kirby                    XC16 v1.24
+  1 Build of 20 units using different waveforms and hidden menus.
+    Supports WFs: (1)Lynx-6; (2)Lynx-8; (3)AdvLynx-6; (4)AdvLynx-8
+    Move beyond use of LYNX_6, LYNX_8, and FOG defines, but still have no way
+    to query BOLT for waveform load-out so depend on bt_waveform_load.h, et al.
+  2 Improve code readability/maintainability by making procedures to reduce size
+    of some unwieldy switch statements
+  3 Do more auto-correcting of brevity code entry as user goes along
+  4 Use S.GKN ltng query/response for building admin UpdateInfilOptDisplay
+  5 Simply corrected/added some comments and improved whitespace
+  File Dependency Added:
+    ../Lightning/bt_waveform_load.h      (1)
+    ../Lightning/bt_waveform_traits.h    (1)
+  Files Altered:
+    main.c              (1,2,3,4)
+    main.h              (5)
+    esd_ver.h           (1)
+
+1.3.1.4 (2018/12/17) Rob Kirby                    XC16 v1.24
+  1 Build for QRC using hidden menus to select active waveform and group key.
+    Supports WFs: (1)Lynx-8; (2)PINE; (3)PUMA; (4)unused
+    Some hardcoded values used for display of available choices until Lighning
+    can query BOLT waveforms and pass info to ESD.  Conditional compile on FOG.
+    NOTE - in future base more things off devCfg.selWf rather than conditionals.
+  2 Clear ltngBitRpt error flags when pwr OFF; BIT query infil keys when pwr ON
+  3 Update BIT icon and BIT screen when Lightning D.BIT message received
+  4 Conditional compile for BOOT_MUTE until have broader concensus
+  Files Altered:
+    config_memory.c     (1)
+    main.c/h            (1,2,3,4)
+    keypad.c/h          (1)
+    esd_ver.h           (1)
+
+1.3.0.5 (2018/09/25) Rob Kirby                    XC16 v1.24
+  1 Add NVG and remove MED backlight setting (now have HIGH, LOW, NVG, OFF)
+    after NavSpecWarCom N4 NVG mgr and NSW G3 LT Bishop evaluated four options
+  2 Refactor sysErrFlags to esdErrFlags since also have ltngBitRpt
+  3 In UpdateBitResultsDisplay() add check of ltngBitRpt as well as esdErrFlags
+  4 Do not include main.h in keypad.c as there is no need for it
+  5 Adjust display strings/offsets when appropriate to rid leading <SP> in code
+  Files Altered:
+    main.c/h            (1,2,3,5)
+    uc1701x.h           (1)
+    interrupts.c        (2)
+    i2c2.c              (2)
+    config_memory.c/h   (2)
+    uc1701x.c           (2)
+    tmr2.c              (2)
+    keypad.c            (4)
+    esd_ver.h
+
+1.2.2.2/L (2017/12/18) Rob Kirby                  XC16 v1.24
+  Add conditional compilation to support Lynx-6 or Lynx-8 thru esd_ver.h define
+  1.2.2.2 results in same functionality as 1.2.1.0, i.e. supports Lynx-8
+  1.2.2.L supports Lynx-6, otherwise same as 1.2.1.0
+    Files Altered:
+      main.c
+      esd_ver.h
+
+1.2.1.0 (2017/10/20) Rob Kirby                    XC16 v1.24
+  Modify PrepForSleep() to clear most error flags to stop carry-over at PWR ON
+  Remove redundant bit ltngBit from typedef esd_t
+    Files Altered:
+      main.c/h
+
+1.2.0.6 (2017/08/30) Rob Kirby                    XC16 v1.24
+  Add ZEROIZE to user interface; add EraseEeprom() to mc24aa512.
+  Display Lightning version info along with ESD version; use ltng_cmpnt.h.
+  Implement support for Lynx-8 waveform (had been using Lynx-6)
+  Add screen for describing up to six active BIT failures; use ltng_cmpnt.h
+  Handle no D.RST while in System Check screen; display DEPOT MAINT REQ
+  Put ESD version in .h file; Remove unused files hextext.c/h
+    Files Added:
+      ../Lightning/ltng_cmpnt.h
+      esd_ver.h
+    Files Altered:
+      keypad.c/h
+      main.c/h
+      mc24aa512.h
+      mc24aa512_i2c2.c (also renamed from mc24aa512.c)
+    Files Deleted:
+      hextext.c/h
+
+1.1.3.A/p-911 (2017/07/27) Rob Kirby              XC16 v1.24
+  Fix not going to Coordinates screen from Home when up-arrow while in 911.
+  Fix not displaying EXFIL MUTED when re-mute during CBC squawks in mute.
+  Don't check gas gauge IC's ACR when battery % already zero (ACR can roll-over)
+    Files Altered:
+      main.c/h
+
+1.1.3.9/p-911 (2017/05/02) Rob Kirby     XC16 v1.24
+  Fix processing of "no GPS" report from Ltng (strstr for "no GPS" before "GPS")
+    Files Altered:
+      main.c
+
+1.1.3.8/p-911 (2017/04/28) Rob Kirby              XC16 v1.24
+  Used for OT&E at Trident Spectre 2017
+  Fix gas gauge to match R309 15mOhm sense resistor on new green board.
+  Improve handling of inadvertent keypad inputs due to dive decompression.
+  Version info and comments in other files.
+    Files Altered:
+      ltc2943.h
+      keypad.c
+      main.c
+      coord.c
+
+1.1.3.7/p-911 (2017/04/10) Rob Kirby              XC16 v1.24
+  Used at Ft. Huachuca prior to OT&E at Trident Spectre 2017
+  Blink Coordinate Info when AoF more than 00:05:15 and continue to display
+  increase AoF until it reaches max for uint16_t (18:12:15).  When in MUTE
+  have HOME indicate that instead of always showing brevity code.  Fix bug of
+  trying to write NVMEM after closing I2C2 when going to sleep.  Left justify
+  MGRS text and add space between GZD and 100km Square ID.  Make coord and aof
+  track each other (set aof = 0 when get D.GLL instead of D.TGF) so coord cant
+  get stuck in inverse video.  Lower keypad entry time from 5 to 2 seconds.
+  Rework esd_t so .hwF only 8-bits and BIT results only needs 2 hex digits by
+  doing away with invalid bits, some of which used for other purposes.  Do BIT
+  of TMR2 and TMR3. have uc1701 set .spi if appropriate.
+    Files Altered:
+      main.c/h
+      coords.c/h
+      keypad.c
+      uc1701x.c
+
+1.1.1.8/170331 (2017/03/31) Rob Kirby             XC16 v1.24
+  Basically a complete re-write as the original implementation, based on the
+  paradigm used in BT7HH, was not scaling well to new capabilites.
+  Added MGRS and MUTE; plus re-enable Duty Cycle and Transmit Power.
+    Files
+      config_memory.c/h
+      configuration_bits.c
+      coords.c/h
+      crc.c/h
+      fonts.c/h
+      hextext.c/h
+      i2c2.c/h
+      interrupts.c
+      keypad.c/h
+      lcd.c/h
+      ltc2943.c/h
+      main.c/h
+      mc24aa512.c/h
+      micro_defs.h
+      queue.c/h
+      si7021.c/h
+      stdint_extended.h
+      tmr2.c/h
+      traps.c
+      uart.h
+      uart1_queued.c/h
+      uc1701x.c/h
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+1.0/1.2.170131 (2017/02/01) Megan Kozub            XC16 v1.24
+  Implemented interrupt-based I2C.
+    Files Altered:
+      i2c2.c/h
+      interrupts.c
+      user.c
+      main.c (version string update only)
+1.0/1.1.170130 (2017/01/30) Megan Kozub            XC16 v1.24
+  Global changes to I2C2 (re-write based on I2C1).
+  Utilize WDT for I2C.
+  Polling version of I2C.
+  Updated gas gauge parameters (25mOhm, 75% de-rated battery)
+    Files Altered/Added:
+      user.c/h
+      i2c2.c/h
+      main.c/h
+      mc24aa512.c
+1.0/0.1.161114 (2016/11/14) Nick Sunshine          XC16 v1.24
+  Release for demo at Hawaii F&DR.
+    Files
+      configuration_bits.c
+      fonts.c/h
+      hextext.c/h
+      i2c2.c/h
+      interrupts.c
+      lcd.c/h
+      ltc2943.c/h
+      main.c
+      mc24aa512.c/h
+      si7021.c/h
+      system.c/h
+      traps.c
+      uart1.c/h
+      uc1701x.c/h
+      user.c/h
